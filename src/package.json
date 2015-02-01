@@ -1,0 +1,22 @@
+{
+  "name": "gitlab-2-gitlab",
+  "version": "0.0.1",
+  "description": "",
+  "main": "main.js",
+  "dependencies": {
+    "gitlab": "^1.2.0",
+    "node-rest-client": "^1.4.4",
+    "promise": "^6.1.0",
+    "q": "^1.1.2",
+    "underscore": "^1.7.0"
+  },
+  "devDependencies": {
+    "node-inspector": "^0.8.3",
+    "util": "^0.10.3"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Jose Jiménez <jjimenezlopez@gmail.com>",
+  "license": "ISC"
+}
