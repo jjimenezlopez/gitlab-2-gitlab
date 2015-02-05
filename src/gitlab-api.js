@@ -73,7 +73,17 @@
 
     methods.createIssue = function (issue, destinyProject) {
         return new Promise(function (resolve, reject) {
-            destinyGitlab.issues.create(destinyProject.id, issue, function (newIssue) {
+            var data = {
+                title: issue.title,
+                description: issue.description,
+                labels: ''
+            };
+
+            _.each(issue.labels, function (label) {
+                data.labels = label + ',';
+            });
+
+            destinyGitlab.issues.create(destinyProject.id, data, function (newIssue) {
                 if (newIssue !== true) {
                     process.stdout.write('.');
                     if (issue.state === 'closed') {
