@@ -11,14 +11,14 @@
         destinyProjects,
         originGitlab,
         destinyGitlab,
-        publicMethods = {};
+        methods = {};
 
-    publicMethods.setGitlabs = function (origin, destiny) {
+    methods.setGitlabs = function (origin, destiny) {
         originGitlab = origin;
         destinyGitlab = destiny;
     };
 
-    publicMethods.createDestinyProject = function (project) {
+    methods.createDestinyProject = function (project) {
         return new Promise(function (resolve, reject) {
             destinyGitlab.projects.create(project, function (result) {
                 if (result === true) {
@@ -31,54 +31,109 @@
         });
     };
 
-    publicMethods.copyIssues = function (originProject, destinyProject) {
+    methods.getLabels = function (project) {
+        var me = methods;
+
+        return new Promise(function (resolve, reject) {
+            originGitlab.projects.labels.all(project.id, function (labels) {
+                resolve(labels);
+            });
+        });
+    };
+
+    methods.createLabel = function (label, project) {
+        return new Promise(function (resolve, reject) {
+            destinyGitlab.labels.create(project.id, label, function (newLabel) {
+                resolve();
+            });
+        });
+    };
+
+    methods.createLabels = function (labels, project) {
+        var me = methods,
+            promises = [];
+
+        _.each(labels, function (label) {
+            promises.push(me.createLabel(label, project));
+        });
+
+        return Promise.all(promises)
+            .catch(function (err) {
+                console.log(err);
+            });
+    };
+
+    methods.getIssues = function (project) {
+        return new Promise(function (resolve, reject) {
+            originGitlab.projects.issues.list(project.id, function (issues) {
+                resolve(issues);
+            });
+        });
+    };
+
+    methods.createIssue = function (issue, destinyProject) {
+        return new Promise(function (resolve, reject) {
+            destinyGitlab.issues.create(destinyProject.id, issue, function (newIssue) {
+                if (newIssue !== true) {
+                    process.stdout.write('.');
+                    if (issue.state === 'closed') {
+                        process.stdout.write('C');
+                        destinyGitlab.issues.edit(destinyProject.id, newIssue.id, {state_event: 'close'}, function (value) {
+                            resolve();
+                        });
+                    } else {
+                        process.stdout.write('O');
+                        resolve();
+                    }
+                } else {
+                    resolve();
+                }
+            });
+        });
+    };
+
+    methods.copyIssues = function (originProject, destinyProject) {
+        var me = methods;
+
         return new Promise(function (resolve, reject) {
             if (originProject.issues_enabled) {
                 console.log(' ---- Getting issues...');
                 var promises = [];
 
-                originGitlab.projects.issues.list(originProject.id, function (issues) {
-                    process.stdout.write(' ---- Copying');
-                    _.each(issues, function (issue) {
-                        promises.push(new Promise(function (resolve, reject) {
-                            destinyGitlab.issues.create(destinyProject.id, issue, function (newIssue) {
-                                if (newIssue !== true) {
-                                    process.stdout.write('.');
-                                    if (issue.state === 'closed') {
-                                        process.stdout.write('C');
-                                        destinyGitlab.issues.edit(destinyProject.id, newIssue.id, {state_event: 'close'}, function (value) {
-                                            resolve();
-                                        });
-                                    } else {
-                                        process.stdout.write('O');
-                                        resolve();
-                                    }
-                                }
-                            });
-                        }));
-                    });
-
-                    Promise.all(promises)
-                        .then(resolve)
-                        .catch(function (err) {
-                            reject(err);
+                me.getIssues(originProject)
+                    .then(function (issues) {
+                        process.stdout.write(' ---- Copying');
+                        _.each(issues, function (issue) {
+                            promises.push(me.createIssue(issue, destinyProject));
                         });
-                });
+
+                        return Promise.all(promises);
+                    })
+                    .then(resolve)
+                    .catch(function (err) {
+                        console.log(err);
+                        reject(err);
+                    });
             } else {
                 console.log(' ---- Issues disabled.');
             }
         });
     };
 
-    publicMethods.migrateProject = function (projectId) {
+    methods.migrateProject = function (projectId) {
+        var me = methods,
+            destinyProject,
+            originProject;
+
         return new Promise(function (resolve, reject) {
             originGitlab.projects.show(projectId, function (project) {
                 console.log(' -- Migrating project', project.name);
-                publicMethods.createDestinyProject(project)
-                    .then(function (destinyProject) {
-                        var promise = Promise.resolve(destinyProject);
+                originProject = project;
+                me.createDestinyProject(project)
+                    .then(function (theProject) {
+                        var promise = Promise.resolve(theProject);
 
-                        if (destinyProject === true) {
+                        if (theProject === true) {
                             // already exists
                             promise = new Promise(function (resolve, reject) {
                                 destinyGitlab.projects.all(function (projects) {
@@ -91,9 +146,19 @@
                             });
                         }
 
-                        return promise.then(function (destinyProject) {
-                            return publicMethods.copyIssues(project, destinyProject);
-                        });
+                        return promise;
+                    })
+                    .then(function (project) {
+                        destinyProject = project;
+                    })
+                    .then(function () {
+                        return me.getLabels(originProject);
+                    })
+                    .then(function (labels) {
+                        return me.createLabels(labels, destinyProject);
+                    })
+                    .then(function () {
+                        return me.copyIssues(originProject, destinyProject);
                     })
                     .then(function () {
                         resolve();
@@ -105,5 +170,5 @@
         });
     };
 
-    module.exports = publicMethods;
+    module.exports = methods;
 }());
