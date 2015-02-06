@@ -19,7 +19,7 @@
     };
 
     methods.createDestinyProject = function (project) {
-        return new Promise(function (resolve, reject) {
+        return new Promise(function (resolve) {
             destinyGitlab.projects.create(project, function (result) {
                 if (result === true) {
                     console.log(' --- Project ' + project.name + ' already exists.');
@@ -32,9 +32,7 @@
     };
 
     methods.getLabels = function (project) {
-        var me = methods;
-
-        return new Promise(function (resolve, reject) {
+        return new Promise(function (resolve) {
             originGitlab.projects.labels.all(project.id, function (labels) {
                 resolve(labels);
             });
@@ -42,7 +40,7 @@
     };
 
     methods.createLabel = function (label, project) {
-        return new Promise(function (resolve, reject) {
+        return new Promise(function (resolve) {
             destinyGitlab.labels.create(project.id, label, function (newLabel) {
                 resolve();
             });
@@ -64,7 +62,7 @@
     };
 
     methods.getIssues = function (project) {
-        return new Promise(function (resolve, reject) {
+        return new Promise(function (resolve) {
             originGitlab.projects.issues.list(project.id, function (issues) {
                 resolve(issues);
             });
@@ -72,7 +70,7 @@
     };
 
     methods.createIssue = function (issue, destinyProject) {
-        return new Promise(function (resolve, reject) {
+        return new Promise(function (resolve) {
             var data = {
                 title: issue.title,
                 description: issue.description,
@@ -126,6 +124,7 @@
                     });
             } else {
                 console.log(' ---- Issues disabled.');
+                resolve();
             }
         });
     };
@@ -175,6 +174,7 @@
                     })
                     .catch(function (err) {
                         console.log(err);
+                        reject(err);
                     });
             });
         });
