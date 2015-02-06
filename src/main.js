@@ -49,6 +49,7 @@ getUserData('Origin Gitlab URL: ')
         }
     })
     .then(function () {
+
         originGitlab = gitlab({
             url: originRepo,
             token: originToken
@@ -101,17 +102,20 @@ getUserData('Origin Gitlab URL: ')
         return listProjects;
     })
     .then(function (numbers) {
-        var promises = [];
+        var promises = [],
+            sequence = Promise.resolve();
 
         console.log('Working...');
         _.each(numbers, function (number) {
-            promises.push(gitlabApi.migrateProject(number));
+            sequence = sequence.then(function () {
+                return gitlabApi.migrateProject(number);
+            });
         });
 
-        return Promise.all(promises);
+        return sequence;
     })
     .then(function () {
-        console.log('Migration finished!');
+        console.log('\nMigration finished!');
     })
     .catch(function (err) {
         console.log(err);

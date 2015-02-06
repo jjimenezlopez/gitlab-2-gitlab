@@ -41,7 +41,7 @@
 
     methods.createLabel = function (label, project) {
         return new Promise(function (resolve) {
-            destinyGitlab.labels.create(project.id, label, function (newLabel) {
+            destinyGitlab.labels.create(project.id, label, function () {
                 resolve();
             });
         });
@@ -110,10 +110,14 @@
 
                 me.getIssues(originProject)
                     .then(function (issues) {
-                        process.stdout.write(' ---- Copying');
-                        _.each(issues, function (issue) {
-                            promises.push(me.createIssue(issue, destinyProject));
-                        });
+                        if (issues.length) {
+                            process.stdout.write(' ---- Copying');
+                            _.each(issues, function (issue) {
+                                promises.push(me.createIssue(issue, destinyProject));
+                            });
+                        } else {
+                            process.stdout.write(' ---- No issues to copy');
+                        }
 
                         return Promise.all(promises);
                     })
@@ -144,13 +148,17 @@
 
                         if (theProject === true) {
                             // already exists
-                            promise = new Promise(function (resolve, reject) {
+                            promise = new Promise(function (resolvePromise) {
                                 destinyGitlab.projects.all(function (projects) {
+                                    var existentProject;
+
                                     _.each(projects, function (aProject) {
                                         if (project.name === aProject.name) {
-                                            resolve(aProject);
+                                            existentProject = aProject;
                                         }
                                     });
+
+                                    resolvePromise(existentProject);
                                 });
                             });
                         }
@@ -170,6 +178,7 @@
                         return me.copyIssues(originProject, destinyProject);
                     })
                     .then(function () {
+                        console.log('\n --- ' + project.name + ' migrated!');
                         resolve();
                     })
                     .catch(function (err) {
