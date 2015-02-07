@@ -1,3 +1,5 @@
+/* global -Promise */
+
 var Promise = require('promise'),
     readline = require('readline'),
     _ = require('underscore'),
