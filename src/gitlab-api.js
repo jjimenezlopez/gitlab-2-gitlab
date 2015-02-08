@@ -69,8 +69,26 @@
                 });
             },
 
-            createIssue: function (issue, destinyProject) {
+            getNotes: function (project, issue) {
                 return new Promise(function (resolve) {
+                    originGitlab.projects.issues.notes.all(project.id, issue.id, function (notes) {
+                        resolve(notes);
+                    });
+                });
+            },
+
+            closeIssue: function (destinyProject, newIssue) {
+                return new Promise(function (resolve) {
+                    destinyGitlab.issues.edit(destinyProject.id, newIssue.id, {state_event: 'close'}, function () {
+                        resolve();
+                    });
+                });
+            },
+
+            createIssue: function (issue, originProject, destinyProject) {
+                var me = this;
+
+                return new Promise(function (resolve, reject) {
                     var data = {
                         title: issue.title,
                         description: issue.description,
@@ -83,16 +101,26 @@
 
                     destinyGitlab.issues.create(destinyProject.id, data, function (newIssue) {
                         if (newIssue !== true) {
+                            var promise;
+
                             process.stdout.write('.');
                             if (issue.state === 'closed') {
                                 process.stdout.write('C');
-                                destinyGitlab.issues.edit(destinyProject.id, newIssue.id, {state_event: 'close'}, function (value) {
-                                    resolve();
-                                });
+                                promise = me.closeIssue(destinyProject, newIssue);
                             } else {
                                 process.stdout.write('O');
-                                resolve();
+                                promise = Promise.resolve();
                             }
+
+                            promise.then(function () {
+                                return me.getNotes(originProject, issue);
+                            })
+                            .then(function (notes) {
+                                // create issues
+                                process.stdout.write('' + notes.length);
+                                resolve();
+                            })
+                            .catch(reject);
                         } else {
                             resolve();
                         }
@@ -109,23 +137,27 @@
                         var promises = [];
 
                         me.getIssues(originProject)
-                        .then(function (issues) {
-                            if (issues.length) {
-                                process.stdout.write(' ---- Copying');
-                                _.each(issues, function (issue) {
-                                    promises.push(me.createIssue(issue, destinyProject));
-                                });
-                            } else {
-                                process.stdout.write(' ---- No issues to copy');
-                            }
+                            .then(function (issues) {
+                                var sequence = Promise.resolve();
 
-                            return Promise.all(promises);
-                        })
-                        .then(resolve)
-                        .catch(function (err) {
-                            console.log(err);
-                            reject(err);
-                        });
+                                if (issues.length) {
+                                    process.stdout.write(' ---- Copying');
+                                    _.each(issues, function (issue) {
+                                        sequence = sequence.then(function () {
+                                            return me.createIssue(issue, originProject, destinyProject)
+                                        });
+                                    });
+                                } else {
+                                    process.stdout.write(' ---- No issues to copy');
+                                }
+
+                                return sequence;
+                            })
+                            .then(resolve)
+                            .catch(function (err) {
+                                console.log(err);
+                                reject(err);
+                            });
                     } else {
                         console.log(' ---- Issues disabled.');
                         resolve();
@@ -176,6 +208,9 @@
                         })
                         .then(function () {
                             return me.copyIssues(originProject, destinyProject);
+                        })
+                        .then(function () {
+                            return me.clone
                         })
                         .then(function () {
                             console.log('\n --- ' + project.name + ' migrated!');
