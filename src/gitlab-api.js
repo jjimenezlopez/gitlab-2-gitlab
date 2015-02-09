@@ -77,28 +77,30 @@
                 });
             },
 
-            closeIssue: function (destinyProject, newIssue) {
+            closeIssue: function (destinyProject, issueId) {
                 return new Promise(function (resolve) {
-                    destinyGitlab.issues.edit(destinyProject.id, newIssue.id, {state_event: 'close'}, function () {
+                    destinyGitlab.issues.edit(destinyProject.id, issueId, {state_event: 'close'}, function () {
                         resolve();
                     });
                 });
             },
 
-            createNote: function (projectId, note, issueId) {
-                var newNote = {
-                    body: note.body
-                };
+            createNote: function (project, note, issue) {
+                var me = this,
+                    newNote = {
+                        body: note.body
+                    };
 
                 return new Promise(function (resolve) {
                     // when an issue is closed, gitlab creates a note with the text
-                    // '_Status changed to closed_', so we want to skip this one.
-                    if (newNote.body !== '_Status changed to closed_') {
-                        destinyGitlab.notes.create(projectId, issueId, newNote, function () {
+                    // '_Status changed to closed_', so we want to close the issue.
+                    if (newNote.body === '_Status changed to closed_' && issue.state === 'closed') {
+                        me.closeIssue(project, issue.id)
+                            .then(resolve);
+                    } else {
+                        destinyGitlab.notes.create(project.id, issue.id, newNote, function () {
                             resolve();
                         });
-                    } else {
-                        resolve();
                     }
                 });
             },
@@ -119,34 +121,23 @@
 
                     destinyGitlab.issues.create(destinyProject.id, data, function (newIssue) {
                         if (newIssue !== true) {
-                            var promise;
-
                             process.stdout.write('.');
-                            if (issue.state === 'closed') {
-                                process.stdout.write('C');
-                                promise = me.closeIssue(destinyProject, newIssue);
-                            } else {
-                                process.stdout.write('O');
-                                promise = Promise.resolve();
-                            }
 
-                            promise.then(function () {
-                                return me.getNotes(originProject, issue);
-                            })
-                            .then(function (notes) {
-                                var promises = [];
+                            me.getNotes(originProject, issue)
+                                .then(function (notes) {
+                                    var promises = [];
 
-                                // create notes
-                                _.each(notes, function (note) {
-                                    promises.push(me.createNote(destinyProject.id, note, newIssue.id));
-                                });
+                                    // create notes
+                                    _.each(notes, function (note) {
+                                        promises.push(me.createNote(destinyProject, note, issue));
+                                    });
 
-                                return Promise.all(promises);
-                            })
-                            .then(function () {
-                                resolve();
-                            })
-                            .catch(reject);
+                                    return Promise.all(promises);
+                                })
+                                .then(function () {
+                                    resolve();
+                                })
+                                .catch(reject);
                         } else {
                             resolve();
                         }
