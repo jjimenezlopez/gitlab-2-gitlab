@@ -85,6 +85,18 @@
                 });
             },
 
+            createNote: function (projectId, note, issueId) {
+                var newNote = {
+                    body: note.body
+                };
+
+                return new Promise(function (resolve) {
+                    destinyGitlab.notes.create(projectId, issueId, newNote, function () {
+                        resolve();
+                    });
+                });
+            },
+
             createIssue: function (issue, originProject, destinyProject) {
                 var me = this;
 
@@ -116,8 +128,16 @@
                                 return me.getNotes(originProject, issue);
                             })
                             .then(function (notes) {
-                                // create issues
-                                process.stdout.write('' + notes.length);
+                                var promises = [];
+
+                                // create notes
+                                _.each(notes, function (note) {
+                                    promises.push(me.createNote(destinyProject.id, note, newIssue.id));
+                                });
+
+                                return Promise.all(promises);
+                            })
+                            .then(function () {
                                 resolve();
                             })
                             .catch(reject);
