@@ -91,9 +91,15 @@
                 };
 
                 return new Promise(function (resolve) {
-                    destinyGitlab.notes.create(projectId, issueId, newNote, function () {
+                    // when an issue is closed, gitlab creates a note with the text
+                    // '_Status changed to closed_', so we want to skip this one.
+                    if (newNote.body !== '_Status changed to closed_') {
+                        destinyGitlab.notes.create(projectId, issueId, newNote, function () {
+                            resolve();
+                        });
+                    } else {
                         resolve();
-                    });
+                    }
                 });
             },
 
