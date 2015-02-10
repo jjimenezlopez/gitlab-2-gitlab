@@ -3,7 +3,6 @@
 var Promise = require('promise'),
     readline = require('readline'),
     _ = require('underscore'),
-    gitlab = require('gitlab'),
     util = require('util'),
     gitlabApi = require('./gitlab-api'),
     originRepo,
@@ -43,33 +42,28 @@ getUserData('Origin Gitlab URL: ')
     })
     .then(function (value) {
         destinyToken = value;
+        return getUserData('SSH public key path: ');
+    })
+    .then(function (value) {
+        publicKeyPath = value;
+        return getUserData('SSH private key path: ');
+    })
+    .then(function (value) {
+        privateKeyPath = value;
     })
     .then(function () {
-        if (!originRepo || !originToken || !destinyRepo || !destinyToken) {
+        if (!originRepo || !originToken || !destinyRepo || !destinyToken || !publicKeyPath || !privateKeyPath) {
             console.error('You must provide all requested data.');
             process.exit();
         }
     })
     .then(function () {
+        
+        gitlabApi.setOrigin(originRepo, originToken);
+        gitlabApi.setDestiny(destinyRepo, destinyToken);
+        gitlabApi.setSSHKeys(publicKeyPath, privateKeyPath);
 
-        originGitlab = gitlab({
-            url: originRepo,
-            token: originToken
-        });
-
-        destinyGitlab = gitlab({
-            url:   destinyRepo,
-            token: destinyToken
-        });
-
-        gitlabApi.setGitlabs(originGitlab, destinyGitlab);
-
-        return new Promise(function (resolve, reject) {
-            console.log('Getting projects from', originRepo);
-            originGitlab.projects.all(function (projects) {
-                resolve(projects);
-            });
-        });
+        return gitlabApi.getOriginProjects();
 
     })
     .then(function (projects) {

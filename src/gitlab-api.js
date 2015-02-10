@@ -5,17 +5,49 @@
 
     var Promise = require('promise'),
         _ = require('underscore'),
+        gitlab = require('gitlab'),
+        NodeGit = require('nodegit'),
+        moment = require('moment'),
         theOriginRepo,
         theDestinyRepo,
         originProjects,
         destinyProjects,
+        publicSSHKey,
+        privateSSHKey,
         originGitlab,
         destinyGitlab,
         methods = {
 
-            setGitlabs: function (origin, destiny) {
-                originGitlab = origin;
-                destinyGitlab = destiny;
+            setOrigin: function (repo, token) {
+                theOriginRepo = repo;
+
+                originGitlab = gitlab({
+                    url: repo,
+                    token: token
+                });
+            },
+
+            setDestiny: function (repo, token) {
+                theDestinyRepo = repo;
+
+                destinyGitlab = gitlab({
+                    url:   repo,
+                    token: token
+                });
+            },
+
+            setSSHKeys: function (publicKey, privateKey) {
+                publicSSHKey = publicKey;
+                privateSSHKey = privateKey;
+            },
+
+            getOriginProjects: function () {
+                return new Promise(function (resolve) {
+                    console.log('Getting projects from', theOriginRepo);
+                    originGitlab.projects.all(function (projects) {
+                        resolve(projects);
+                    });
+                });
             },
 
             createDestinyProject: function (project) {
@@ -182,6 +214,38 @@
                 });
             },
 
+            cloneRepository: function (project) {
+                var url = project.ssh_url_to_repo,
+                    local_path = '/tmp/gitlab2gitlab/' + project.path + moment().format('DDMMYYYYhmmss'),
+                    opts = {
+                        ignoreCertErrors: 1,
+                        remoteCallbacks: {
+                            credentials: function(url, userName) {
+                                return NodeGit.Cred.sshKeyNew(
+                                    'git',
+                                    publicSSHKey,
+                                    privateSSHKey,
+                                    '');
+                                }
+                            }
+                        };
+
+                return new Promise(function (resolve, reject) {
+                    console.log('\n ---- Cloning repo', url);
+
+                    NodeGit.Clone.clone(url, local_path, opts)
+                        .then(function (repo) {
+                            process.stdout.write('\tRepository cloned in' + local_path);
+                            resolve(repo);
+                        })
+                        .catch(function (err) {
+                            console.log(err);
+                            reject(err);
+                        });
+
+                });
+            },
+
             migrateProject: function (projectId) {
                 var me = this,
                     destinyProject,
@@ -227,14 +291,16 @@
                             return me.copyIssues(originProject, destinyProject);
                         })
                         .then(function () {
-                            return me.clone
+                            return me.cloneRepository(originProject);
+                        })
+                        .then(function (repo) {
+                            return Promise.resolve();
                         })
                         .then(function () {
                             console.log('\n --- ' + project.name + ' migrated!');
                             resolve();
                         })
                         .catch(function (err) {
-                            console.log(err);
                             reject(err);
                         });
                     });
