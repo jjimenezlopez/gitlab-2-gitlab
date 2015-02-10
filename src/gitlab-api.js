@@ -77,15 +77,15 @@
                 });
             },
 
-            closeIssue: function (destinyProject, issueId) {
+            closeIssue: function (projectId, issueId) {
                 return new Promise(function (resolve) {
-                    destinyGitlab.issues.edit(destinyProject.id, issueId, {state_event: 'close'}, function () {
+                    destinyGitlab.issues.edit(projectId, issueId, {state_event: 'close'}, function () {
                         resolve();
                     });
                 });
             },
 
-            createNote: function (project, note, issue) {
+            createNote: function (projectId, note, issue, state) {
                 var me = this,
                     newNote = {
                         body: note.body
@@ -94,11 +94,11 @@
                 return new Promise(function (resolve) {
                     // when an issue is closed, gitlab creates a note with the text
                     // '_Status changed to closed_', so we want to close the issue.
-                    if (newNote.body === '_Status changed to closed_' && issue.state === 'closed') {
-                        me.closeIssue(project, issue.id)
+                    if (newNote.body === '_Status changed to closed_' && state === 'closed') {
+                        return me.closeIssue(projectId, issue.id)
                             .then(resolve);
                     } else {
-                        destinyGitlab.notes.create(project.id, issue.id, newNote, function () {
+                        destinyGitlab.notes.create(projectId, issue.id, newNote, function () {
                             resolve();
                         });
                     }
@@ -125,18 +125,18 @@
 
                             me.getNotes(originProject, issue)
                                 .then(function (notes) {
-                                    var promises = [];
+                                    var sequence = Promise.resolve();
 
                                     // create notes
                                     _.each(notes, function (note) {
-                                        promises.push(me.createNote(destinyProject, note, issue));
+                                        sequence = sequence.then(function () {
+                                            return me.createNote(destinyProject.id, note, newIssue, issue.state);
+                                        });
                                     });
 
-                                    return Promise.all(promises);
+                                    return sequence;
                                 })
-                                .then(function () {
-                                    resolve();
-                                })
+                                .then(resolve)
                                 .catch(reject);
                         } else {
                             resolve();
