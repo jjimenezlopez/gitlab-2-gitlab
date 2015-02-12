@@ -8,12 +8,12 @@
         gitlab = require('gitlab'),
         NodeGit = require('nodegit'),
         moment = require('moment'),
+        shelljs = require('shelljs'),
+        colors = require('colors'),
         theOriginRepo,
         theDestinyRepo,
         originProjects,
         destinyProjects,
-        publicSSHKey,
-        privateSSHKey,
         originGitlab,
         destinyGitlab,
         methods = {
@@ -36,14 +36,9 @@
                 });
             },
 
-            setSSHKeys: function (publicKey, privateKey) {
-                publicSSHKey = publicKey;
-                privateSSHKey = privateKey;
-            },
-
             getOriginProjects: function () {
                 return new Promise(function (resolve) {
-                    console.log('Getting projects from', theOriginRepo);
+                    console.log('Getting projects from'.yellow, theOriginRepo);
                     originGitlab.projects.all(function (projects) {
                         resolve(projects);
                     });
@@ -89,7 +84,7 @@
 
                 return Promise.all(promises)
                 .catch(function (err) {
-                    console.log(err);
+                    console.log(colors.red(err));
                 });
             },
 
@@ -193,11 +188,11 @@
                                     process.stdout.write(' ---- Copying');
                                     _.each(issues, function (issue) {
                                         sequence = sequence.then(function () {
-                                            return me.createIssue(issue, originProject, destinyProject)
+                                            return me.createIssue(issue, originProject, destinyProject);
                                         });
                                     });
                                 } else {
-                                    process.stdout.write(' ---- No issues to copy');
+                                    console.log(' ---- No issues to copy');
                                 }
 
                                 return sequence;
@@ -214,35 +209,14 @@
                 });
             },
 
-            cloneRepository: function (project) {
-                var url = project.ssh_url_to_repo,
-                    local_path = '/tmp/gitlab2gitlab/' + project.path + moment().format('DDMMYYYYhmmss'),
-                    opts = {
-                        ignoreCertErrors: 1,
-                        remoteCallbacks: {
-                            credentials: function(url, userName) {
-                                return NodeGit.Cred.sshKeyNew(
-                                    'git',
-                                    publicSSHKey,
-                                    privateSSHKey,
-                                    '');
-                                }
-                            }
-                        };
-
+            migrateRepository: function (originRepo, projectName, destinyRepo) {
                 return new Promise(function (resolve, reject) {
-                    console.log('\n ---- Cloning repo', url);
-
-                    NodeGit.Clone.clone(url, local_path, opts)
-                        .then(function (repo) {
-                            process.stdout.write('\tRepository cloned in' + local_path);
-                            resolve(repo);
-                        })
-                        .catch(function (err) {
-                            console.log(err);
-                            reject(err);
-                        });
-
+                    console.log('\n ---- Migrating repository'.yellow);
+                    if (shelljs.exec('./shell/migrate-repository.sh ' + originRepo + ' ' + projectName + ' ' + destinyRepo).code !== 0) {
+                        reject('Error: Git operation failed');
+                    } else {
+                        resolve();
+                    }
                 });
             },
 
@@ -252,8 +226,13 @@
                     originProject;
 
                 return new Promise(function (resolve, reject) {
+
+                    if (!shelljs.which('git')) {
+                        reject('Sorry, this script requires git');
+                    }
+
                     originGitlab.projects.show(projectId, function (project) {
-                        console.log(' -- Migrating project', project.name);
+                        console.log(colors.yellow(' -- Migrating project ' + project.name));
                         originProject = project;
                         me.createDestinyProject(project)
                         .then(function (theProject) {
@@ -291,13 +270,14 @@
                             return me.copyIssues(originProject, destinyProject);
                         })
                         .then(function () {
-                            return me.cloneRepository(originProject);
-                        })
-                        .then(function (repo) {
-                            return Promise.resolve();
+                            var originUrl = originProject.ssh_url_to_repo,
+                                originPath = project.path + moment().format('DDMMYYYYhmmss'),
+                                destinyUrl = destinyProject.ssh_url_to_repo;
+
+                            return me.migrateRepository(originUrl, originPath, destinyUrl);
                         })
                         .then(function () {
-                            console.log('\n --- ' + project.name + ' migrated!');
+                            console.log(colors.green(' -- ' + project.name + ' migrated!'));
                             resolve();
                         })
                         .catch(function (err) {

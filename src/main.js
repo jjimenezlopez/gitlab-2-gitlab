@@ -5,6 +5,7 @@ var Promise = require('promise'),
     _ = require('underscore'),
     util = require('util'),
     gitlabApi = require('./gitlab-api'),
+    colors = require('colors'),
     originRepo,
     destinyRepo,
     originToken,
@@ -42,26 +43,17 @@ getUserData('Origin Gitlab URL: ')
     })
     .then(function (value) {
         destinyToken = value;
-        return getUserData('SSH public key path: ');
-    })
-    .then(function (value) {
-        publicKeyPath = value;
-        return getUserData('SSH private key path: ');
-    })
-    .then(function (value) {
-        privateKeyPath = value;
     })
     .then(function () {
-        if (!originRepo || !originToken || !destinyRepo || !destinyToken || !publicKeyPath || !privateKeyPath) {
-            console.error('You must provide all requested data.');
+        if (!originRepo || !originToken || !destinyRepo || !destinyToken) {
+            console.log('You must provide all requested data.'.red);
             process.exit();
         }
     })
     .then(function () {
-        
+
         gitlabApi.setOrigin(originRepo, originToken);
         gitlabApi.setDestiny(destinyRepo, destinyToken);
-        gitlabApi.setSSHKeys(publicKeyPath, privateKeyPath);
 
         return gitlabApi.getOriginProjects();
 
@@ -101,7 +93,7 @@ getUserData('Origin Gitlab URL: ')
         var promises = [],
             sequence = Promise.resolve();
 
-        console.log('Working...');
+        console.log('Working...'.yellow);
         _.each(numbers, function (number) {
             sequence = sequence.then(function () {
                 return gitlabApi.migrateProject(number);
@@ -111,8 +103,8 @@ getUserData('Origin Gitlab URL: ')
         return sequence;
     })
     .then(function () {
-        console.log('\nMigration finished!');
+        console.log('\nMigration finished!'.green);
     })
     .catch(function (err) {
-        console.log(err);
+        console.log(colors.red(err));
     });
